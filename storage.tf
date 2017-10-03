@@ -15,6 +15,7 @@ variable "packer_storage_account_name" {
 variable "admin_username" {
   default = "storageadmin"
 }
+
 variable "admin_password" {}
 
 variable "image_uri" {}
