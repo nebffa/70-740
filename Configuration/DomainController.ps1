@@ -1,3 +1,6 @@
+$ErrorActionPreference = 'Stop'
+
+
 configuration DomainController
 {
     Param
@@ -14,7 +17,7 @@ configuration DomainController
 
     Import-DscResource -ModuleName xActiveDirectory
     Import-DscResource -ModuleName xComputerManagement
-    Import-DscResource -ModuleName xNetworking
+    Import-DscResource -ModuleName @{ModuleName='xNetworking'; ModuleVersion='5.2.0.0'}
     Import-DscResource -ModuleName xPSDesiredStateConfiguration
     Import-DscResource -ModuleName xDnsServer
 
@@ -49,12 +52,12 @@ configuration DomainController
 
         xDnsServerAddress PrimaryDNSClient {
             Address = $node.NodeName
-            InterfaceAlias = 'Ethernet 5'
+            InterfaceAlias = 'Ethernet'
             AddressFamily = 'IPV4'
         }
 
         xDnsServerADZone AddReverseADZone {
-            Name = '2.0.10.in-addr.arpa'
+            Name = '5.0.10.in-addr.arpa'
             DynamicUpdate = 'Secure'
             ReplicationScope = 'Forest'
             Ensure = 'Present'

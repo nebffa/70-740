@@ -1,3 +1,13 @@
+Param
+(
+    [Parameter(Mandatory=$true)]
+    [ValidateSet('HyperV', 'Azure')]
+    [String]$EnvironmentType,
+
+    [Switch]$Force
+)
+
+
 Import-Module DscExecution -Force
 
 
@@ -23,11 +33,34 @@ configuration LCMConfig
 }
 
 
-$terraformOutput = (terraform output -json) | ConvertFrom-Json
+Write-Output 'Getting VM IP addresses...'
+if ($EnvironmentType -eq 'HyperV')
+{
+    $cacheLocation = "$PSScriptRoot\.vagrant\ips.json"
+    if (!(Test-Path $cacheLocation) -or $Force)
+    {
+        $ips = @{
+            'dc' = vagrant address dc
+            'fileserver1' = vagrant address fileserver-1
+            'fileserver2' = vagrant address fileserver-2
+            'fileserver3' = vagrant address fileserver-3
+        }
+        $ips | ConvertTo-Json | Out-File $cacheLocation -Encoding UTF8
+    }
+    else
+    {
+        $ips = Get-Content -Path $cacheLocation | ConvertFrom-Json
+    }
+}
+elseif ($EnvironmentType -eq 'Terraform')
+{
+    $terraformOutput = (terraform output -json) | ConvertFrom-Json
+}
+
 $configurationData = @{
     AllNodes = @(
         @{
-            NodeName = $terraformOutput.public_ips.value[0]
+            NodeName = $ips.dc
             PSDscAllowPlainTextPassword = $true
             PSDscAllowDomainUser = $true
         }
@@ -39,26 +72,34 @@ $scriptBlock = {
     Install-Module xActiveDirectory
     Install-Module xComputerManagement
     Install-Module xPSDesiredStateConfiguration
-    Install-Module xNetworking
+    Install-Module xNetworking -RequiredVersion 5.2.0.0
     Install-Module xDnsServer -RequiredVersion 1.6.0.0
 }
 
-$administratorCredential = New-PSCredential -Username storageadmin -PlaintextPassword 'testtest1234!'
+# TODO: something to ensure the above modules are installed
+
+$administratorCredential = New-PSCredential -Username vagrant -PlaintextPassword 'vagrant'
 $domainAdministratorCredential = New-PSCredential -Username STORAGE\storageadmin -PlaintextPassword 'testtest1234!'
-Invoke-Command -ScriptBlock $scriptBlock `
-    -Credential $administratorCredential -ComputerName $terraformOutput.public_ips.value[0]
-LCMConfig -ConfigurationData $configurationData -OutputPath LCMConfig
-Set-DscLocalConfigurationManager -Force -Path LCMConfig -Credential $administratorCredential
 
-DomainController `
-    -ComputerName dc1 `
-    -DomainName 'STORAGE.com' `
-    -DomainCredential $administratorCredential `
+Write-Output 'Configuring the local configuration manager on the domain controller...'
+Invoke-DscConfiguration `
+    -Configuration (Get-Command LCMConfig) `
     -ConfigurationData $configurationData `
-    -OutputPath DomainController
+    -Credential $administratorCredential `
+    -Verbose
 
-Start-DscConfiguration -Path DomainController -Force -Wait -Credential $administratorCredential
-
+Write-Output 'Configuring the domain controller...'
+Invoke-DscConfiguration `
+    -Configuration (Get-Command DomainController) `
+    -ConfigurationData $configurationData `
+    -Credential $administratorCredential `
+    -ConfigurationParameters @{
+        'ComputerName' = 'dc1'
+        'DomainName' = 'STORAGE.com'
+        'DomainCredential' = $domainAdministratorCredential
+    } `
+    -Verbose 
+    
 $fileServerConfigurationData = @{
     AllNodes = @(
         @{
@@ -68,8 +109,16 @@ $fileServerConfigurationData = @{
         },
 
         @{
-            NodeName = $terraformOutput.public_ips.value[1]
-            DnsServerAddress = $terraformOutput.public_ips.value[0]
+            NodeName = $ips.fileserver1
+            DnsServerAddress = $ips.dc
+            DomainName = 'STORAGE.com'
+            DomainCredential = $domainAdministratorCredential
+            ComputerName = 'fs1'
+        },
+
+        @{
+            NodeName = $ips.fileserver2
+            DnsServerAddress = $ips.dc
             DomainName = 'STORAGE.com'
             DomainCredential = $domainAdministratorCredential
             ComputerName = 'fs1'
@@ -77,14 +126,21 @@ $fileServerConfigurationData = @{
     )
 }
 
-LCMConfig -ConfigurationData $fileServerConfigurationData -OutputPath LCMConfig
-Set-DscLocalConfigurationManager -Force -Path LCMConfig -Credential $administratorCredential
-Invoke-Command -ScriptBlock $scriptBlock `
-    -Credential $administratorCredential -ComputerName $terraformOutput.public_ips.value[1]
 Invoke-DscConfiguration `
-    -ConfigurationName 'FileServer' `
+    -Configuration (Get-Command LCMConfig) `
     -ConfigurationData $fileServerConfigurationData `
-    -Credential $administratorCredential
+    -Credential $administratorCredential `
+    -Verbose
+
+
+# Invoke-Command -ScriptBlock $scriptBlock `
+#     -Credential $administratorCredential -ComputerName $ips.fileserver1 -Verbose
+
+Invoke-DscConfiguration `
+    -Configuration (Get-Command FileServer) `
+    -ConfigurationData $fileServerConfigurationData `
+    -Credential $administratorCredential `
+    -Verbose
 # FileServer `
 #     -ConfigurationData $fileServerConfigurationData `
 #     -OutputPath FileServer

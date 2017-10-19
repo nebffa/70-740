@@ -11,6 +11,9 @@ Vagrant.configure("2") do |config|
   config.vm.define "dc" do |dc|
     dc.vm.communicator = "winrm"
     dc.vm.box = "windows-2016-datacenter"
+    dc.vm.provider "hyperv" do |hyperv|
+      hyperv.vmname = "dc"
+    end
     config.vm.synced_folder ".", "/vagrant", type: "smb", smb_username: "vagrant", smb_password: vagrant_password
   end
 
@@ -18,6 +21,9 @@ Vagrant.configure("2") do |config|
     config.vm.define "fileserver-#{index}" do |fileserver|
       fileserver.vm.communicator = "winrm"
       fileserver.vm.box = "windows-2016-datacenter"
+      fileserver.vm.provider "hyperv" do |hyperv|
+        hyperv.vmname = "fileserver-#{index}"
+      end
       config.vm.synced_folder ".", "/vagrant", type: "smb", smb_username: "vagrant", smb_password: vagrant_password
     end
   end

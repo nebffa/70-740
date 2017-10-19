@@ -1,3 +1,6 @@
+$ErrorActionPreference = 'Stop'
+
+
 configuration FileServer
 {
     Import-DscResource -ModuleName xActiveDirectory
@@ -14,8 +17,8 @@ configuration FileServer
         }
 
         xDnsServerAddress DNSServer {
-            Address        = $node.DnsServerAddress
-            InterfaceAlias = "Ethernet 5"
+            Address        = $Node.DnsServerAddress
+            InterfaceAlias = "Ethernet"
             AddressFamily = "IPV4"
         }
 
