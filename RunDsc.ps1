@@ -33,6 +33,50 @@ configuration LCMConfig
 }
 
 
+configuration DSCModules
+{
+    Import-DscResource -ModuleName @{ModuleName='PowerShellModule'; ModuleVersion='0.3'}
+
+    Node $AllNodes.NodeName
+    {
+        PSModuleResource xActiveDirectory
+        {
+            Ensure = 'Present'
+            Module_Name = 'xActiveDirectory'
+            RequiredVersion = '2.16.0.0'
+        }
+
+        PSModuleResource xComputerManagement
+        {
+            Ensure = 'Present'
+            Module_Name = 'xComputerManagement'
+            RequiredVersion = '3.0.0.0'
+        }
+
+        PSModuleResource xPSDesiredStateConfiguration
+        {
+            Ensure = 'Present'
+            Module_Name = 'xPSDesiredStateConfiguration'
+            RequiredVersion = '7.0.0.0'
+        }
+
+        PSModuleResource xNetworking
+        {
+            Ensure = 'Present'
+            Module_Name = 'xNetworking'
+            RequiredVersion = '5.2.0.0'
+        }
+
+        PSModuleResource xDnsServer
+        {
+            Ensure = 'Present'
+            Module_Name = 'xDnsServer'
+            RequiredVersion = '1.6.0.0'
+        }
+    }
+}
+
+
 Write-Output 'Getting VM IP addresses...'
 if ($EnvironmentType -eq 'HyperV')
 {
@@ -67,19 +111,11 @@ $configurationData = @{
     )
 }
 
-$scriptBlock = {
-    Set-PSRepository -InstallationPolicy Trusted -Name PSGallery
-    Install-Module xActiveDirectory
-    Install-Module xComputerManagement
-    Install-Module xPSDesiredStateConfiguration
-    Install-Module xNetworking -RequiredVersion 5.2.0.0
-    Install-Module xDnsServer -RequiredVersion 1.6.0.0
-}
 
 # TODO: something to ensure the above modules are installed
 
 $administratorCredential = New-PSCredential -Username vagrant -PlaintextPassword 'vagrant'
-$domainAdministratorCredential = New-PSCredential -Username STORAGE\storageadmin -PlaintextPassword 'testtest1234!'
+$domainAdministratorCredential = New-PSCredential -Username STORAGE\vagrant -PlaintextPassword 'vagrant'
 
 Write-Output 'Configuring the local configuration manager on the domain controller...'
 Invoke-DscConfiguration `
@@ -87,6 +123,12 @@ Invoke-DscConfiguration `
     -ConfigurationData $configurationData `
     -Credential $administratorCredential `
     -Verbose
+
+Invoke-DscConfiguration `
+    -Configuration (Get-Command DSCModules) `
+    -ConfigurationData $configurationData `
+    -Credential $administratorCredential `
+    -Verbose 
 
 Write-Output 'Configuring the domain controller...'
 Invoke-DscConfiguration `
@@ -99,7 +141,7 @@ Invoke-DscConfiguration `
         'DomainCredential' = $domainAdministratorCredential
     } `
     -Verbose 
-    
+
 $fileServerConfigurationData = @{
     AllNodes = @(
         @{
@@ -121,7 +163,15 @@ $fileServerConfigurationData = @{
             DnsServerAddress = $ips.dc
             DomainName = 'STORAGE.com'
             DomainCredential = $domainAdministratorCredential
-            ComputerName = 'fs1'
+            ComputerName = 'fs2'
+        },
+
+        @{
+            NodeName = $ips.fileserver3
+            DnsServerAddress = $ips.dc
+            DomainName = 'STORAGE.com'
+            DomainCredential = $domainAdministratorCredential
+            ComputerName = 'fs3'
         }
     )
 }
@@ -132,17 +182,14 @@ Invoke-DscConfiguration `
     -Credential $administratorCredential `
     -Verbose
 
-
-# Invoke-Command -ScriptBlock $scriptBlock `
-#     -Credential $administratorCredential -ComputerName $ips.fileserver1 -Verbose
+Invoke-DscConfiguration `
+    -Configuration (Get-Command DSCModules) `
+    -ConfigurationData $fileServerConfigurationData `
+    -Credential $administratorCredential `
+    -Verbose 
 
 Invoke-DscConfiguration `
     -Configuration (Get-Command FileServer) `
     -ConfigurationData $fileServerConfigurationData `
     -Credential $administratorCredential `
     -Verbose
-# FileServer `
-#     -ConfigurationData $fileServerConfigurationData `
-#     -OutputPath FileServer
-# Start-DscConfiguration -Path FileServer -Force -Wait -Credential $administratorCredential
-

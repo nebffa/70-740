@@ -25,7 +25,6 @@ configuration FileServer
         xWaitForADDomain WaitForDomain
         {
             DomainName = $Node.DomainName
-            DomainUserCredential = $Node.DomainCredential
             RetryCount = 5
             RetryIntervalSec = 5
             DependsOn = '[xDnsServerAddress]DNSServer'

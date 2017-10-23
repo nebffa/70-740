@@ -13,6 +13,9 @@ Vagrant.configure("2") do |config|
     dc.vm.box = "windows-2016-datacenter"
     dc.vm.provider "hyperv" do |hyperv|
       hyperv.vmname = "dc"
+      hyperv.ip_address_timeout = 240
+      hyperv.cpus = 2
+      hyperv.memory = 4096
     end
     config.vm.synced_folder ".", "/vagrant", type: "smb", smb_username: "vagrant", smb_password: vagrant_password
   end
@@ -23,6 +26,9 @@ Vagrant.configure("2") do |config|
       fileserver.vm.box = "windows-2016-datacenter"
       fileserver.vm.provider "hyperv" do |hyperv|
         hyperv.vmname = "fileserver-#{index}"
+        hyperv.ip_address_timeout = 240
+        hyperv.cpus = 2
+        hyperv.memory = 4096
       end
       config.vm.synced_folder ".", "/vagrant", type: "smb", smb_username: "vagrant", smb_password: vagrant_password
     end
